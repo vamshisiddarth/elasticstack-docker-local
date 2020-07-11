@@ -1,0 +1,77 @@
+version: '3.7'
+services:
+  es01-sandbox:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.8.0
+    container_name: es01-sandbox
+    environment:
+      - node.name=es01
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - data01:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+    networks:
+      - host
+
+  kibana-sandbox:
+    image: docker.elastic.co/kibana/kibana:7.8.0
+    container_name: kibana-sandbox
+    links:
+      - es01-sandbox
+    environment:
+      SERVER_NAME: es01-sandbox
+      ELASTICSEARCH_HOSTS: http://es01-sandbox:9200
+    ports:
+      - 5601:5601
+    networks:
+      - host
+    depends_on:
+      - es01-sandbox
+
+  filebeat-sandbox:
+    image: docker.elastic.co/beats/filebeat:7.8.0
+    container_name: filebeat-sandbox
+    user: root
+    links:
+      - logstash-sandbox
+    environment:
+      SERVER_NAME: logstash-sandbox
+    volumes:
+      - ./filebeat.docker.yml:/usr/share/filebeat/filebeat.yml
+      - /var/lib/docker/containers:/var/lib/docker/containers
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - host
+    depends_on:
+      - logstash-sandbox
+
+  logstash-sandbox:
+    image: docker.elastic.co/logstash/logstash:7.8.0
+    container_name: logstash-sandbox
+    user: root
+    links:
+      - es01-sandbox
+    environment:
+      SERVER_NAME: es01-sandbox
+    volumes:
+      - ./logstash.yml:/usr/share/logstash/config/logstash.yml
+      - ./conf:/var/logstash/configuration
+      - ./http.log:/tmp/http.log
+    ports:
+      - 9600:9600
+      - 5044:5044
+    networks:
+      - host
+
+volumes:
+  data01:
+    driver: local
+
+networks:
+  host:
